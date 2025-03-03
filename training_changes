@@ -1,0 +1,112 @@
+4.
+
+encoder frozen whole
+added weight init xavier
+changed encoder lr to 1e-4, and decoder  lr to 1e-2
+embed size to 64
+hidden size to 128
+
+----------------------------------------------------------
+
+5.
+
+add dropout to lstm
+hidden size to 64
+
+----------------------------------------------------------
+
+6.
+
+unfreeze encoders last 2 layers
+
+lr for decoder set to 1e-3
+lr for encoder (unfrozeen parts) set to 3e-5
+
+lower dropout for lstm 0.2
+
+----------------------------------------------------------
+
+7.
+
+hidden size 512 embed size 256 set
+enc lr set 3e-5
+dec lr set 5e-4
+dropout set to 0.3
+add 'weight_decay': 1e-4 to both
+torch.nn.utils.clip_grad_norm_(chain(encoder.parameters(), decoder.parameters()), max_norm=3.0)
+
+
+----------------------------------------------------------
+
+8.
+
+add scheduler factor 0.5, patience 2
+adjust learning rates encoder 1e-5 , decoder 3e-4, weight_decay 1e-5
+patience 4
+max norm 5 in grad clip
+unfreeze resnet18
+added embed dropout, added dropout to encoder
+
+-----------------------------------------------------------
+
+9.
+
+num of layers for lstm set to 2
+dropout for lstm set to 0.5
+separated schedulers for encoder and decoder
+
+
+----------------------------------------------------------
+
+10.
+
+switched to resnet50, frozen whole
+
+
+----------------------------------------------------------
+
+11.
+
+added beam search
+
+unfreeze x layers of resnet50
+beam size set to 7
+embed size set to 512
+batch size set to 32
+
+----------------------------------------------------------
+
+12.
+
+-
+
+-------------------------------------------------------------
+
+
+13.
+
+lr fixed to enc 1e-4, dec 1e-3
+weight decay set to 1e-4
+
+
+-----------------------------------------------------------
+
+14.
+
+enc lr 1e-5
+dec lr 1e-4
+
+--------------------------------------------------------------
+
+
+15.
+
+enc lr 1e-6
+dec lr 1e-5
+
+
+------------------------------------------------------------
+
+16.
+
+added attention, parameters are same
