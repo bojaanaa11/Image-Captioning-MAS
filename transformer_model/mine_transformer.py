@@ -25,7 +25,7 @@ from torch.nn import TransformerEncoder, TransformerEncoderLayer, TransformerDec
 embed_size = 512
 hidden_size = 512
 num_layers = 6
-batch_size = 32
+english = 64
 num_epochs = 1000
 encoder_learning_rate = 1e-6
 decoder_learning_rate = 1e-5
@@ -37,7 +37,7 @@ best_val_loss = float('inf')
 no_improve = 0
 encoder_linear_dropout_rate = 0.5
 embed_dropout_rate = 0.5
-lstm_dropout_rate = 0.5
+decoder_dropout = 0.3
 encoder_max_grad_clip_norm = 2.0
 decoder_max_grad_clip_norm = 2.0
 
@@ -222,7 +222,7 @@ class TransformerDecoder(nn.Module):
         mask = (torch.triu(torch.ones(sz, sz)) == 1).transpose(0, 1)
         mask = mask.float().masked_fill(mask == 0, float('-inf')).masked_fill(mask == 1, float(0.0))
         return mask
-    
+
 # ------------------------- Vocabulary class --------------------------------
 class Vocabulary:
     def __init__(self, freq_threshold=5):
@@ -391,7 +391,7 @@ class GroupedTestDataset(Dataset):
 
 # ------------------------------------ Main functions -----------------------------
 
-def evaluate(encoder, decoder, loader, beam_size, device):
+def evaluate(encoder, decoder, loader, device):
     encoder.eval()
     decoder.eval()
     results = []
@@ -435,11 +435,6 @@ def train(encoder, decoder, train_loader, val_loss_loader, val_metrics_loader, d
     val_losses = []
     bleu_scores = []
 
-    beam_size = 7
-    # max_beam_size = 20
-    beam_size_increment_epoch = 2
-    best_beam_size = beam_size
-
     for epoch in range(num_epochs):
         # Training phase
         encoder.train()
@@ -467,7 +462,7 @@ def train(encoder, decoder, train_loader, val_loss_loader, val_metrics_loader, d
             epoch_train_loss += loss.item() * images.size(0)
 
             if idx % 100 == 0:
-                print(f'Epoch [{epoch+1}/{num_epochs}], Step [{idx}/{len(train_loader)}], Loss: {loss.item():.4f}, Beam Size: {beam_size}')
+                print(f'Epoch [{epoch+1}/{num_epochs}], Step [{idx}/{len(train_loader)}], Loss: {loss.item():.4f}')
 
         # Calculate average training loss
         epoch_train_loss /= len(train_loader.dataset)
@@ -495,12 +490,12 @@ def train(encoder, decoder, train_loader, val_loss_loader, val_metrics_loader, d
 
         # Calculate validation metrics
         print("\n Evaluating started!\n")
-        val_metrics = evaluate(encoder, decoder, val_metrics_loader, beam_size, device)
+        val_metrics = evaluate(encoder, decoder, val_metrics_loader, device)
         bleu_scores.append(val_metrics['BLEU-4'])
 
         print(f"\nEpoch {epoch+1} Summary:")
         print(f"Train Loss: {epoch_train_loss:.4f} | Val Loss: {epoch_val_loss:.4f}")
-        print(f"BLEU-4: {val_metrics['BLEU-4']:.4f} | Beam Size: {beam_size}\n")
+        print(f"BLEU-4: {val_metrics['BLEU-4']:.4f}\n")
 
         # Early stopping logic
         if val_metrics['BLEU-4'] > best_bleu or epoch_val_loss < best_val_loss:
@@ -518,8 +513,6 @@ def train(encoder, decoder, train_loader, val_loss_loader, val_metrics_loader, d
             # torch.save(decoder_scheduler.state_dict(), "decoder_scheduler.pth")
 
             torch.save(optimizer.state_dict(), "optimizer.pth")
-
-            best_beam_size = beam_size
         else:
             no_improve += 1
 
@@ -531,7 +524,7 @@ def train(encoder, decoder, train_loader, val_loss_loader, val_metrics_loader, d
         # encoder_scheduler.step(epoch_val_loss)
         # decoder_scheduler.step(epoch_val_loss)
 
-    return train_losses, val_losses, bleu_scores, best_beam_size
+    return train_losses, val_losses, bleu_scores
 
 def save_training_metrics(train_losses, val_losses, bleu_scores):
     # Combine data into rows
@@ -572,23 +565,21 @@ def plot_training_metrics(train_losses, val_losses, bleu_scores):
     plt.savefig('training_metrics.png')
     plt.close()
 
-def test(encoder, decoder, test_loader, beam_size, device):
+def test(encoder, decoder, test_loader, device):
     print('\n Testing started!')
     # Load best model checkpoint if using early stopping
     encoder.load_state_dict(torch.load('best_encoder.pth'))
     decoder.load_state_dict(torch.load('best_decoder.pth'))
 
     # Final evaluation
-    final_metrics = evaluate(encoder, decoder, test_loader, beam_size, device)
+    final_metrics = evaluate(encoder, decoder, test_loader, device)
 
     with open('test.log', 'w') as f:
         f.write(str(final_metrics['BLEU-4']))
         f.write('\n')
-        f.write(str(beam_size))
 
     print("\nFinal Test Metrics:")
     print(f"BLEU-4: {final_metrics['BLEU-4']:.4f}")
-    print(f"Beam Size: {beam_size:.4f}")
 
 if __name__ == "__main__":
 
@@ -691,7 +682,7 @@ if __name__ == "__main__":
         vocab_size=len(vocab),
         num_layers=6,
         nhead=8,
-        dropout=0.1
+        dropout=decoder_dropout
     ).to(device)
 
     # Criterion
@@ -707,11 +698,11 @@ if __name__ == "__main__":
     sys.path.append('/home/obojana/bojana/pycocoevalcap')
     os.environ["METEOR_JAR"] = "/home/obojana/bojana/pycocoevalcap/meteor/meteor-1.5.jar"
 
-    train_losses, val_losses, bleu_scores, best_beam_size = train(encoder, decoder, train_loader, val_loss_loader, val_metrics_loader, device)
+    train_losses, val_losses, bleu_scores = train(encoder, decoder, train_loader, val_loss_loader, val_metrics_loader, device)
 
     # ------------------------ SAVE and PLOT ------------------------------
     save_training_metrics(train_losses, val_losses, bleu_scores)
     plot_training_metrics(train_losses, val_losses, bleu_scores)
 
     # ------------------------ TEST ------------------------------
-    test(encoder, decoder, test_loader, best_beam_size, device)
+    test(encoder, decoder, test_loader, device)
