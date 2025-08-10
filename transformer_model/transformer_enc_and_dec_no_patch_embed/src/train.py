@@ -1,5 +1,6 @@
 import torch
 from src.eval import evaluate
+from src.save_training_info import save_training_metrics, plot_training_metrics
 
 def train(
         encoder,
@@ -101,5 +102,7 @@ def train(
         if no_improve >= patience:
             print("Early stopping triggered!")
             break
+
+        save_training_metrics(train_losses, val_losses, bleu_scores)
 
     return train_losses, val_losses, bleu_scores

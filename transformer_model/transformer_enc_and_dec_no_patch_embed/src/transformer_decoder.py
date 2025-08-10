@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import src.parameters as params
 from src.positional_encoding import PositionEncoding
+from torch.nn.utils.rnn import pad_sequence
 
 once = False
 
@@ -147,6 +148,85 @@ class TransformerDecoder(nn.Module):
                 break
 
         return captions
+
+    def generate_beam(self, features, beam_width=5, max_length=params.max_length):
+        batch_size = features.size(1)  # batch_size is the second dimension
+        start_token = self.vocab.stoi["<start>"]
+        end_token = self.vocab.stoi["<end>"]
+
+        # List to store generated captions for each instance in the batch
+        all_captions = []
+
+        # Process each instance in the batch separately
+        for i in range(batch_size):
+            # Initialize beams for the current instance: (log_prob, sequence)
+            beams = [(0.0, [start_token])]  # Start with a single beam containing the start token
+
+            # Get features for the current instance
+            instance_features = features[:, i:i+1, :]  # (num_pixels, 1, embed_size)
+
+            for _ in range(max_length):
+                new_beams = []
+
+                for log_prob, sequence in beams:
+                    # Stop expanding this beam if the last token is <end>
+                    if sequence[-1] == end_token:
+                        new_beams.append((log_prob, sequence))
+                        continue
+
+                    # Convert sequence to tensor
+                    captions = torch.tensor([sequence], dtype=torch.long).to(features.device)  # (1, current_length)
+
+                    # Embed the current captions
+                    embeddings = self.embed(captions)  # (1, current_length, embed_size)
+
+                    # Apply positional encoding
+                    embeddings = self.positional_encoding(embeddings)
+
+                    # Permute embeddings to match the expected shape: [current_length, 1, embed_size]
+                    embeddings = embeddings.permute(1, 0, 2)
+
+                    # Generate masks
+                    current_length = captions.size(1)
+                    tgt_mask = self.generate_square_subsequent_mask(current_length).to(features.device)  # (current_length, current_length)
+                    tgt_padding_mask = (captions == self.vocab.stoi["<pad>"]).to(features.device)  # (1, current_length)
+                    tgt_padding_mask = tgt_padding_mask.float().masked_fill(tgt_padding_mask == 1, float('-inf'))
+
+                    decoder_output = self.transformer_decoder(
+                        tgt=embeddings,  # (current_length, 1, embed_size)
+                        memory=instance_features,  # (num_pixels, 1, embed_size)
+                        tgt_mask=tgt_mask,  # (current_length, current_length)
+                        tgt_key_padding_mask=tgt_padding_mask  # (1, current_length)
+                    )
+
+                    # Permute decoder_output back to [1, current_length, embed_size]
+                    decoder_output = decoder_output.permute(1, 0, 2)
+
+
+                    # Predict the next word logits
+                    next_word_logits = self.fc_out(decoder_output[:, -1, :])  # (1, vocab_size)
+                    next_word_probs = torch.log_softmax(next_word_logits, dim=-1)  # (1, vocab_size)
+
+                    # Get top-k candidates
+                    topk_probs, topk_indices = next_word_probs.topk(beam_width, dim=-1)  # (1, beam_width)
+
+                    # Expand the beam with top-k candidates
+                    for j in range(beam_width):
+                        new_log_prob = log_prob + topk_probs[0, j].item()
+                        new_sequence = sequence + [topk_indices[0, j].item()]
+                        new_beams.append((new_log_prob, new_sequence))
+
+                # Keep only the top-k beams
+                beams = sorted(new_beams, key=lambda x: x[0], reverse=True)[:beam_width]
+
+            # Store the best beam for the current instance
+            best_beam = beams[0][1]  # Sequence with the highest log probability
+            all_captions.append(torch.tensor(best_beam, dtype=torch.long).to(features.device))
+
+        # Pad the captions to the same length
+        all_captions = pad_sequence(all_captions, batch_first=True, padding_value=self.vocab.stoi["<pad>"])
+
+        return all_captions
 
     def generate_square_subsequent_mask(self, sz):
         mask = (torch.triu(torch.ones(sz, sz)) == 1).transpose(0, 1)

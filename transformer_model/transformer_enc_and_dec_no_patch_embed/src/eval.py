@@ -13,7 +13,7 @@ def evaluate(encoder, decoder, loader, device):
         for images, captions_list, img_ids in loader:
             images = images.to(device)
             features = encoder(images)
-            generated = decoder.generate(features, params.max_length)
+            generated = decoder.generate_beam(features, params.beam_size, params.max_length)
 
             # Process captions
             for i in range(generated.size(0)):

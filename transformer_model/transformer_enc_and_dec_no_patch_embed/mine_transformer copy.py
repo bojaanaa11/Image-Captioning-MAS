@@ -1,74 +1,15 @@
-import csv
 import sys, os
 
 import torch
 import torch.nn as nn
 
-import matplotlib.pyplot as plt
-
 from src.cnn_encoder import EncoderCNN
 from src.transformer_decoder import TransformerDecoder
-from src.eval import evaluate
+
 from src.train import train
 
 from src.prepare import prepare
 import src.parameters as params
-
-
-def save_training_metrics(train_losses, val_losses, bleu_scores):
-    # Combine data into rows
-    epochs = list(range(1, len(train_losses) + 1))
-    rows = zip(epochs, train_losses, val_losses, bleu_scores)
-
-    # Save to CSV file
-    with open("/home/obojana/bojana/src_saved/training_results.csv", "w", newline="") as f:
-        writer = csv.writer(f)
-        writer.writerow(["Epoch", "Train Loss", "Val Loss", "BLEU-4"])  # Header
-        writer.writerows(rows)
-
-def plot_training_metrics(train_losses, val_losses, bleu_scores):
-    plt.figure(figsize=(12, 5))
-
-    epochs = range(1, len(train_losses) + 1)
-
-    # Loss plot
-    plt.subplot(1, 2, 1)
-    plt.plot(epochs, train_losses, label='Training Loss', marker='o')
-    plt.plot(epochs, val_losses, label='Validation Loss', marker = 's')
-    plt.title('Training and Validation Loss')
-    plt.xlabel('Epoch')
-    plt.xticks(range(1, len(epochs) + 1))
-    plt.ylabel('Loss')
-    plt.legend()
-
-    # Metrics plot
-    plt.subplot(1, 2, 2)
-    plt.plot(epochs, bleu_scores, label='BLEU-4', marker='^')
-    plt.title('Validation Metrics')
-    plt.xlabel('Epoch')
-    plt.ylabel('Score')
-    plt.xticks(range(1, len(epochs) + 1))
-    plt.legend()
-
-    plt.tight_layout()
-    plt.savefig('/home/obojana/bojana/src_saved/training_metrics.png')
-    plt.close()
-
-def test(encoder, decoder, test_loader, device):
-    print('\n Testing started!')
-    # Load best model checkpoint if using early stopping
-    encoder.load_state_dict(torch.load('/home/obojana/bojana/src_saved/best_encoder.pth'))
-    decoder.load_state_dict(torch.load('/home/obojana/bojana/src_saved/best_decoder.pth'))
-
-    # Final evaluation
-    final_metrics = evaluate(encoder, decoder, test_loader, device)
-
-    with open('test.log', 'w') as f:
-        f.write(str(final_metrics['BLEU-4']))
-        f.write('\n')
-
-    print("\nFinal Test Metrics:")
-    print(f"BLEU-4: {final_metrics['BLEU-4']:.4f}")
 
 if __name__ == "__main__":
     train_loader, val_loss_loader, val_metrics_loader, test_loader, vocab = prepare()
@@ -108,12 +49,11 @@ if __name__ == "__main__":
         {'params': transformer_encoder_params, 'lr': params.transformer_encoder_learning_rate}  # For the transformer encoder part
     ], weight_decay=params.weight_decay)
 
-
     # ------------------------ TRAIN ------------------------------
     sys.path.append('/home/obojana/bojana/pycocoevalcap')
     os.environ["METEOR_JAR"] = "/home/obojana/bojana/pycocoevalcap/meteor/meteor-1.5.jar"
 
-    train_losses, val_losses, bleu_scores = train(
+    train(
         encoder,
         decoder,
         criterion,
@@ -127,10 +67,3 @@ if __name__ == "__main__":
         params.transformer_decoder_max_grad_clip_norm,
         params.patience
     )
-
-    # ------------------------ SAVE and PLOT ------------------------------
-    save_training_metrics(train_losses, val_losses, bleu_scores)
-    plot_training_metrics(train_losses, val_losses, bleu_scores)
-
-    # ------------------------ TEST ------------------------------
-    test(encoder, decoder, test_loader, params.device)

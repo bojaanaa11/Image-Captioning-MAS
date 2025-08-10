@@ -828,7 +828,7 @@ if __name__ == "__main__":
 
     # Prepare
     # Load full dataset
-    full_coco = COCO('/home/obojana/.cache/kagglehub/datasets/awsaf49/coco-2017-dataset/versions/2/coco2017/annotations/captions_train2017.json')
+    full_coco = COCO('/home/obojana/.cache/kagglehub/datasets/awsaf49/coco-2017-dataset/versions/2/coco2017/coco2017/coco2017/annotations/captions_train2017.json')
     all_img_ids = np.array(full_coco.getImgIds())
 
     # Split 80-20 (vc there is no testing data so taking it from train)

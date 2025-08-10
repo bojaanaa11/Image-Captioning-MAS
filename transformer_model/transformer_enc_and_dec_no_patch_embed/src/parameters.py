@@ -4,9 +4,11 @@ hidden_size = 512
 batch_size = 32
 num_epochs = 1000
 
-cnn_encoder_learning_rate = 1e-6
-transformer_decoder_learning_rate = 1e-5
-transformer_encoder_learning_rate = 1e-5
+beam_size = 10
+
+cnn_encoder_learning_rate = 1e-7
+transformer_decoder_learning_rate = 1e-7
+transformer_encoder_learning_rate = 1e-6
 
 max_length = 30
 freq_threshold = 5
